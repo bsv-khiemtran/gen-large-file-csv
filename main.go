@@ -1,46 +1,95 @@
 package main
 
 import (
-	"encoding/csv"
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/inhies/go-bytesize"
+)
+
+var (
+	maxSize float64 = 100
+	header          = []string{
+		"key",
+		"input_channel_id",
+		"input_video_id",
+	}
 )
 
 func main() {
-	// create a file
-	file, err := os.Create("result.csv")
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("input file name: ")
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fileName := strings.Replace(text, "\n", "", -1)
+	if fileName == "" {
+		log.Fatal("file name is empty")
+	}
+
+	fmt.Println("")
+	fmt.Println(`Valid byte units are "B", "KB", "MB", "GB", "TB", "PB" and "EB"]: `)
+	fmt.Print(`file size wanted: `)
+	text, err = reader.ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+	fileSizeWanted := strings.Replace(text, "\n", "", -1)
+	if fileName == "" {
+		log.Fatal("file size is empty")
+	}
+	b, err := bytesize.Parse(fileSizeWanted)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%s\n", b)
+	maxSize = float64(b)
+
+	fmt.Println("begin gen file csv...")
+	time.Sleep(2 * time.Second)
+
+	file, err := os.Create(fmt.Sprintf("%v.csv", fileName))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	w := csv.NewWriter(file)
-	if err := w.Write([]string{
-		"key",
-		"input_channel_id",
-		"input_video_id",
-	}); err != nil {
-		log.Fatalln("error writing header record to csv:", err)
-	}
-	// Write any buffered data to the underlying writer (standard output).
-	w.Flush()
-
-	for i := 0; i < 100099993939339; i++ {
-		fmt.Println(i)
-		if err := w.Write([]string{
+	fileSize := float64(0)
+	fistRow := true
+	for {
+		writer := bufio.NewWriter(file)
+		rowContent := []string{
 			time.Now().UTC().String(),
 			"UCPW580o8ITQJFLCQlV6uuAw",
 			"LO3ZdbYK8yI",
-		}); err != nil {
-			log.Fatalln("error writing record to csv:", err)
 		}
-		// Write any buffered data to the underlying writer (standard output).
-		w.Flush()
+
+		if fistRow {
+			rowContent = header
+			fistRow = false
+		}
+
+		len, err := writer.WriteString(strings.Join(rowContent, ",") + "\n")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fileSize += float64(len)
+
+		b1 := bytesize.New(fileSize)
+		fmt.Printf("wrote %s \n", b1)
+		writer.Flush()
+
+		if fileSize >= maxSize {
+			break
+		}
 	}
 
-	if err := w.Error(); err != nil {
-		log.Fatal(err)
-	}
+	bt := bytesize.New(fileSize)
+	fmt.Printf("gen %s file [%s] csv success.\n", fileName, bt)
 }
